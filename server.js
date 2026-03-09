@@ -27,14 +27,21 @@ try {
   console.warn("helmet package is missing. Run `npm install` in backend for full security headers.");
 }
 
-// I allow one CORS origin from env, else allow local development.
-const allowedOrigin = process.env.CORS_ORIGIN || "";
+// Allow comma-separated origins from env and local development origins.
+const envAllowedOrigins = new Set(
+  String(process.env.CORS_ORIGIN || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 const localAllowedOrigins = new Set([
   "http://localhost:3000",
   "http://localhost:4000",
+  "http://localhost:5500",
   "http://localhost:5173",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:4000",
+  "http://127.0.0.1:5500",
   "http://127.0.0.1:5173"
 ]);
 // Basic security headers with explicit CSP allow-list for trusted frontend CDNs.
@@ -54,6 +61,7 @@ if (helmetMiddleware) {
           imgSrc: ["'self'", "data:", "blob:"],
           connectSrc: [
             "'self'",
+            "https://cdn.jsdelivr.net",
             "http://localhost:4000",
             "http://127.0.0.1:4000",
             "ws://localhost:4000",
@@ -79,8 +87,10 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
-      if (allowedOrigin && origin === allowedOrigin) return callback(null, true);
-      if (!allowedOrigin && localAllowedOrigins.has(origin)) return callback(null, true);
+      if (envAllowedOrigins.has(origin)) return callback(null, true);
+      if (process.env.NODE_ENV !== "production" && localAllowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
       return callback(new Error("CORS blocked for this origin."));
     },
     credentials: true
