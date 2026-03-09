@@ -28,12 +28,17 @@ try {
 }
 
 // Allow comma-separated origins from env and local development origins.
+function normalizeOrigin(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
 const envAllowedOrigins = new Set(
   String(process.env.CORS_ORIGIN || "")
     .split(",")
-    .map((value) => value.trim())
+    .map((value) => normalizeOrigin(value))
     .filter(Boolean)
 );
+const allowVercelPreviewOrigins = String(process.env.CORS_ALLOW_VERCEL_PREVIEWS || "").trim().toLowerCase() === "true";
 const localAllowedOrigins = new Set([
   "http://localhost:3000",
   "http://localhost:4000",
@@ -87,8 +92,17 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
-      if (envAllowedOrigins.has(origin)) return callback(null, true);
-      if (process.env.NODE_ENV !== "production" && localAllowedOrigins.has(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (envAllowedOrigins.has(normalizedOrigin)) return callback(null, true);
+      if (allowVercelPreviewOrigins) {
+        try {
+          const hostname = new URL(normalizedOrigin).hostname;
+          if (hostname.endsWith(".vercel.app")) return callback(null, true);
+        } catch (error) {
+          // Ignore invalid origin parsing and continue with normal checks.
+        }
+      }
+      if (process.env.NODE_ENV !== "production" && localAllowedOrigins.has(normalizedOrigin)) {
         return callback(null, true);
       }
       return callback(new Error("CORS blocked for this origin."));
